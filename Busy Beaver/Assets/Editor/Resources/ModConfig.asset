@@ -13,19 +13,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: busyBeaverMod
   title: Busy Beaver [REUPLOAD]
-  author: VFlyer, Cooldoom5
+  author: VFlyer, MaddyMoos
   description: 'Turing''s been busy turning things on and off again.
 
     [b]This is a reupload of the original module with permission from the original
     author. Please unsubscribe/disable the module [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2154136518]here.[/url][/b]
 
 
-    Module originally implemented by Cooldoom5
+    Module originally implemented by MaddyMoos
 
     Reuploaded and Maintained by VFlyer
 
 
-    Source Code (Old Version): https://github.com/Cooldoom5/BusyBeaver
+    Source Code (Old Version): https://github.com/maddymoos/BusyBeaver
 
     Source Code (Reuploaded Version): https://github.com/VFlyer/BusyBeaver
 
@@ -35,6 +35,6 @@ MonoBehaviour:
     Manual: https://ktane.timwi.de/HTML/Busy%20Beaver.html
 
 '
-  version: 1.2
+  version: 1.3
   outputFolder: build
   previewImage: {fileID: 2800000, guid: dbeaa1185d00c394394b0be65c1b7715, type: 3}

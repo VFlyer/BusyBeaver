@@ -40,7 +40,8 @@ public class BusyBeaverHandler : MonoBehaviour {
 		interactable = true, requestForceSolve = false,
 		enableLegacy = false, exhibitionMode = false,
 		disableTPToggleBeaver, showHelpingTapes,
-		manualRecovery;
+		manualRecovery, playAnimation;
+	int maxHelpTapesShown = 5;
 
 	private string[] ignoredModules = { // Default ignore list, if it is unable to fetch ignored modules.
 		"Busy Beaver",
@@ -82,8 +83,19 @@ public class BusyBeaverHandler : MonoBehaviour {
 	IEnumerator currentMercyAnim;
 
 	BusyBeaverSettings selfSettings = new BusyBeaverSettings();
+	// Mission overrides
+	static List<BusyBeaverHandler> loadedModules = new List<BusyBeaverHandler>();
+	static List<string> overrideStrings = new List<string>();
+
+	void OnDestroy()
+    {
+		loadedModules.Remove(this);
+		if (!loadedModules.Any())
+			overrideStrings.Clear();
+    }
 	// Use this for initialization
 	void Start () {
+		loadedModules.Add(this);
 		_moduleId = _moduleIdCounter++;
 		string[] ignoreRepo = Boss.GetIgnoredModules(Module);
 		if (ignoreRepo != null && ignoreRepo.Any())
@@ -129,7 +141,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 			showHelpingTapes = selfSettings.enableHelpingTapes;
 			disableTPToggleBeaver = selfSettings.noTPToggleBeaver;
 			manualRecovery = selfSettings.manualRecovery;
-
+			playAnimation = !selfSettings.skipAnimations;
 		}
 		catch
         {
@@ -137,6 +149,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 			enableLegacy = false;
 			showHelpingTapes = true;
 			//exhibitionMode = false;
+			playAnimation = true;
         }
 		OverrideSettings();
 		storedStartingState = enableLegacy;
@@ -218,7 +231,22 @@ public class BusyBeaverHandler : MonoBehaviour {
 			if (cStage > stagesGeneratable || (enableLegacy && cStage + 1 > stagesGeneratable))
 			{
 				interactable = false;
-				StartCoroutine(AnimateFinaleState());
+				if (playAnimation)
+					StartCoroutine(AnimateFinaleState());
+				else
+				{
+					for (int x = 0; x < positionRenderer.Length; x++)
+					{
+						bitsRenderer[x].material = inputStates[x] ? bitStates[1] : bitStates[0];
+						colorblindText[x].text = inputStates[x] ? "1" : "0";
+						colorblindText[x].color = inputStates[x] ? Color.black : Color.white;
+						positionRenderer[x].material = disableState;
+					}
+					progressText.text = "SUBMIT";
+					displayText.text = "";
+					inFinale = true;
+					interactable = true;
+				}
 			}
 			else
 			{
@@ -287,7 +315,7 @@ public class BusyBeaverHandler : MonoBehaviour {
     }
 	bool IsProvidedConditionTrue(char letter)
     {
-		// Legacy Instructions, created by Cooldoom before the transfer
+		// Legacy Instructions, created by MaddyMoos before the transfer
 		switch (letter)
         {// Note, positions are 0-indexed
 
@@ -374,15 +402,21 @@ public class BusyBeaverHandler : MonoBehaviour {
 			Debug.LogFormat("[Busy Beaver #{0}]:-----------STAGE {1}-----------", _moduleId, stageNo);
 			Debug.LogFormat("[Busy Beaver #{0}]: Characters displayed in this stage: \"{1}{2}\"", _moduleId, assignLetters[x], movementLetters[x]);
 			bool stateModifer = enableLegacy ? IsProvidedConditionTrue(assignLetters[x]) : IsProvidedConditionTrueEasy(assignLetters[x]),
-				moveLeft = enableLegacy ? IsProvidedConditionTrue(movementLetters[x]) : IsProvidedConditionTrueEasy(movementLetters[x]);
+				moveLeft = enableLegacy ? false : IsProvidedConditionTrueEasy(movementLetters[x]);
 			Debug.LogFormat("[Busy Beaver #{0}]: The left character's condition returned {1}", _moduleId, stateModifer);
-			Debug.LogFormat("[Busy Beaver #{0}]: The right character's condition returned {1}", _moduleId, moveLeft);
+			if (!enableLegacy)
+				Debug.LogFormat("[Busy Beaver #{0}]: The right character's condition returned {1}", _moduleId, moveLeft);
 			correctStates[currentIndex] = stateModifer;
 			Debug.LogFormat("[Busy Beaver #{0}]: Current Tape: {1}", _moduleId, correctStates.Select(a => a ? "1" : "0").Join(""));
+			if (enableLegacy)
+			{
+				moveLeft = IsProvidedConditionTrue(movementLetters[x]);
+				Debug.LogFormat("[Busy Beaver #{0}]: The right character's condition returned {1}", _moduleId, moveLeft);
+			}
 			currentIndex = Mod(currentIndex + (moveLeft ? -1 : 1), 10);
 			Debug.LogFormat("[Busy Beaver #{0}]: Current Pointer Index: {1}", _moduleId, currentIndex);
-			if (!enableLegacy && (stageNo == 0 || (showHelpingTapes && stageNo <= Math.Min(5, Math.Min(assignLetters.Length, movementLetters.Length) / 2))) || (debugTape && Application.isEditor))
-			{// Check if 5 or more stages have not gone through or half as many stages did not went through already or if the tape should be debugged in the scene AND if legacy mode is NOT enabled
+			if (!enableLegacy && (stageNo == 0 || (showHelpingTapes && stageNo <= Math.Min(maxHelpTapesShown, Math.Min(assignLetters.Length, movementLetters.Length) / 2))) || (debugTape && Application.isEditor))
+			{// Check if too many stages have not gone through or half as many stages did not went through already or if the tape should be debugged in the scene AND if legacy mode is NOT enabled
 				displayStates.Add(correctStates.ToArray());
 				displayPositions.Add(currentIndex);
             }
@@ -430,7 +464,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 				{
 					positionRenderer[x].material = displayPositions[cStage] == x ? bitStates[1] : bitStates[0];
 				}
-				if (cStage > 0 && !requestForceSolve)
+				if (cStage > 0 && !requestForceSolve && playAnimation)
 				{
 					StartCoroutine(AnimateBlendToNextStatesVisible(displayStates[cStage - 1], displayStates[cStage]));
 					StartCoroutine(AnimateBlendToNextPos(displayPositions[cStage - 1], displayPositions[cStage]));
@@ -447,7 +481,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 				{
 					positionRenderer[x].material = disableState;
 				}
-				if (cStage - 1 < displayStates.Count && !requestForceSolve)
+				if (cStage - 1 < displayStates.Count && !requestForceSolve && playAnimation)
 				{
 					StartCoroutine(AnimateDisableStates(displayStates[cStage - 1]));
 					StartCoroutine(AnimateDisablePosition(displayPositions[cStage - 1]));
@@ -530,6 +564,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 			displayText.color = x % 2 == 0 ? Color.white : Color.red;
 			yield return new WaitForSeconds(0.2f);
 		}
+		var firstLoop = true;
 		while (enabled)
 		{
 			for (int z = 0; z < 1 + movementLetters.Length; z++)
@@ -578,7 +613,11 @@ public class BusyBeaverHandler : MonoBehaviour {
 					{
 						StartCoroutine(AnimateDisablePosition(displayPositions[z - 1]));
 						StartCoroutine(AnimateDisableStates(displayStates[z - 1]));
-						kmAudio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.LightBuzzShort, transform);
+						if (firstLoop)
+						{
+							kmAudio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.LightBuzzShort, transform);
+							firstLoop = false;
+						}
 					}
 					yield return new WaitForSeconds(2f);
 				}
@@ -669,9 +708,12 @@ public class BusyBeaverHandler : MonoBehaviour {
     }
 	string[] possibleDisarmTexts = {
 		"MODULE DONE",
+		"MODULE SOLVED",
 		"SOLVED",
 		"THERE WE GO",
 		"WELL DONE",
+		"CONGRATS",
+		"DISARMED",
 		"YOU DID IT"
 	};
 	IEnumerator AnimateDisarmState()
@@ -734,11 +776,15 @@ public class BusyBeaverHandler : MonoBehaviour {
     {
 		// Override settings via mission description.
 		var missionDescription = Game.Mission.Description ?? "";
-		var keywords = new[] { "Legacy", "Exhibition", "Normal", "Boss", "Modern" };
-        var regexOverrideDesc = Regex.Match(missionDescription, string.Format(@"[BusyBeaver](\s({0}))+", keywords.Join("|")));
-		if (regexOverrideDesc.Success)
+		var keywords = new[] { "Legacy", "Exhibition", "Normal", "Boss", "Modern", "Helpless", "Helpful" };
+        var regexOverrideDescAll = Regex.Matches(missionDescription, string.Format(@"[BusyBeaver](\s({0}|H\d+))+", keywords.Join("|")));
+		if (!overrideStrings.Any())
+			foreach (Match item in regexOverrideDescAll)
+				overrideStrings.Add(item.Value);
+		var regexOverrideDesc = overrideStrings.ElementAtOrDefault(loadedModules.IndexOf(this));
+		if (!string.IsNullOrEmpty(regexOverrideDesc))
         {
-			var matchingString = regexOverrideDesc.Value;
+			var matchingString = regexOverrideDesc;
 			var splittedArguments = matchingString.Split().Skip(1);
 			foreach (var value in splittedArguments)
             {
@@ -759,6 +805,19 @@ public class BusyBeaverHandler : MonoBehaviour {
 					case "Boss":
 						exhibitionMode = false;
 						break;
+					case "Helpless":
+						showHelpingTapes = false;
+						break;
+					case "Helpful":
+						showHelpingTapes = true;
+						break;
+					default: // H###
+                        {
+							int stagesProcessed;
+							if (int.TryParse(value.Substring(1),out stagesProcessed))
+								maxHelpTapesShown = stagesProcessed;
+                        }
+						break;
                 }
             }
 			Debug.LogFormat("[Busy Beaver #{0}]: Module's settings have been overriden with the following arguments: {1}", _moduleId, splittedArguments.Join(","));
@@ -775,8 +834,21 @@ public class BusyBeaverHandler : MonoBehaviour {
 				if (!inFinale && ((cStage >= stagesGeneratable && enableLegacy) || (cStage > stagesGeneratable)))
 				{
 					Debug.LogFormat("[Busy Beaver #{0}]: Its time to input. Here we go.", _moduleId);
-					
-					StartCoroutine(AnimateFinaleState());
+					if (playAnimation)
+						StartCoroutine(AnimateFinaleState());
+					else
+                    {
+						for (int x = 0; x < positionRenderer.Length; x++)
+						{
+							bitsRenderer[x].material = inputStates[x] ? bitStates[1] : bitStates[0];
+							colorblindText[x].text = inputStates[x] ? "1" : "0";
+							colorblindText[x].color = inputStates[x] ? Color.black : Color.white;
+							positionRenderer[x].material = disableState;
+						}
+						progressText.text = "SUBMIT";
+						inFinale = true;
+						interactable = true;
+					}
 				}
 				else
 				{
@@ -833,7 +905,7 @@ public class BusyBeaverHandler : MonoBehaviour {
 	bool enableToggleBeaver, storedStartingState;
 	#pragma warning disable 414
 		private readonly string TwitchHelpMessage = "Submit the binary sequence using \"!{0} submit 1101001010\" (In this example, set the binary to 1101001010, then presses the submit button.) 'T'/'F' can be used for 1's and 0's instead. You may space out the binary digits in the command." +
-		"To advance to the next stage, use \"!{0} advance/next\" (Only if there are insufficient unignored modules) You may append a number to specify how many stages to press next on.";
+		"To advance to the next stage, use \"!{0} advance/next\" (Only if in Exhibition Mode) You may append a number to specify how many stages to press next on.";
 	#pragma warning restore 414
 	IEnumerator DelayToggle()
     {
@@ -997,5 +1069,6 @@ public class BusyBeaverHandler : MonoBehaviour {
 		public bool manualRecovery = false;
 		public bool enableHelpingTapes = true;
 		public bool noTPToggleBeaver = false;
+		public bool skipAnimations = false;
 	}
 }
